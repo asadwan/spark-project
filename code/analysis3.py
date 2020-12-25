@@ -32,7 +32,10 @@ taskEventsSchema = StructType(
 
 taskEventsDf = spark.read.schema(taskEventsSchema).csv("../data/task_events/*.csv.gz")
 
-numOfTasksPerJobDf = taskEventsDf.groupBy("job_id").count()
+numOfTasksPerJobDf = taskEventsDf.select(
+    "job_id",
+    "task_index"
+).distinct().groupBy("job_id").count()
 
 avgNumOfTasksPerJob = numOfTasksPerJobDf.select(
     F.mean("count").alias("avg")

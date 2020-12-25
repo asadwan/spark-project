@@ -28,6 +28,13 @@ machineEventsDf = spark.read.schema(machineEventsSchema).csv(
     "../data/machine_events/*.csv.gz"
 )
 
-machineEventsDf.filter(F.col("capacity_cpu").isNotNull()).sort("capacity_cpu").groupBy(
-    "capacity_cpu"
-).count().show()
+cpuCapacityCountDf = machineEventsDf.select("machine_id", "capacity_cpu").distinct().where(
+    F.col("capacity_cpu").isNotNull()
+).groupBy("capacity_cpu").count()
+
+cpuCapacityCountDf.coalesce(1).write.csv(
+    "../data/output/analysis1/machine_cpu_capacity_dist", header=True, mode="overwrite"
+)
+
+
+
