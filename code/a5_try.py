@@ -11,7 +11,7 @@ sc.setLogLevel("ERROR")
 
 spark = SparkSession(sc)
 
-'''4) Do tasks with low priority have a higher probability of being evicted? '''
+'''5) Do tasks with low priority have a higher probability of being evicted? '''
 
 taskEventsSchema = StructType(
     [
@@ -38,36 +38,50 @@ taskEventsDf = (
 )
 # Load tasks_events into dataframe and preprocess the data to remove rows that have null values in columns of interest
 
-priority_Event_type_Df = (
+task_Per_priority_Df = (
     taskEventsDf.select(
+        F.concat_ws("_", F.col("job_id"), F.col("task_index")).alias("task_id"),
         "priority",
-        "event_type",
-
-    ).groupBy("priority")
-    .agg(
-        F.collect_list("event_type").alias("event_types"),
     )
-    .sort("priority")
+        .groupBy("priority")
+        .count()
+        .withColumnRenamed("count", "number of tasks per priority")
+        .sort("priority")
+)
+# compute the number of tasks under each certain priority level
+DataFrame_To_pandas_0 = task_Per_priority_Df.toPandas()
 
+evicted_tasks_Per_priority_Df = (
+    taskEventsDf.select(
+        F.concat_ws("_", F.col("job_id"), F.col("task_index")).alias("task_id"),
+        "event_type",
+        "priority"
+    )
+        .where(F.col("event_type") == 2)
+        .groupBy("priority")
+        .count()
+        .withColumnRenamed("count", "number of evicted tasks per priority")
+        .sort("priority")
 )
 
-Data_Frame_toPandas0 = priority_Event_type_Df.toPandas()
+new = task_Per_priority_Df.join(
+    evicted_tasks_Per_priority_Df, ["priority"]
+).sort("priority")
 
 
 @udf(returnType=FloatType())
-def compute_Evicted_event_Per_priority(event_type):
-    total_number = len(event_type)
-    Evict = event_type.count(2)
-    prob = Evict/total_number
+def compute_Evicted_event_Per_priority(tasks, evicted_tasks):
+    prob = evicted_tasks/tasks
     return prob
 
 
-priority_Event_type_probability_Df = (
-    priority_Event_type_Df.withColumn("probability of evicted_event", compute_Evicted_event_Per_priority(F.col("event_types")))
+Evicted_task_Per_priority_probability_Df = (
+    new.withColumn("probability of evicted_event", compute_Evicted_event_Per_priority(F.col("number of tasks per priority"), F.col("number of evicted tasks per priority")))
 
-)
-priority_event_type = priority_Event_type_probability_Df.drop("event_types")
+).drop("number of tasks per priority", "number of evicted tasks per priority")
+DataFrame_To_pandas_0 = Evicted_task_Per_priority_probability_Df.toPandas()
+print(DataFrame_To_pandas_0.head())
 
-priority_event_type_toPandas1 = priority_event_type.toPandas()
-print(priority_event_type_toPandas1.head())
+
+
 
