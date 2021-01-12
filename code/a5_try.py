@@ -49,7 +49,6 @@ task_Per_priority_Df = (
         .sort("priority")
 )
 # compute the number of tasks under each certain priority level
-DataFrame_To_pandas_0 = task_Per_priority_Df.toPandas()
 
 evicted_tasks_Per_priority_Df = (
     taskEventsDf.select(
@@ -67,6 +66,7 @@ evicted_tasks_Per_priority_Df = (
 new = task_Per_priority_Df.join(
     evicted_tasks_Per_priority_Df, ["priority"]
 ).sort("priority")
+# compute the number of evicted tasks under each certain priority level
 
 
 @udf(returnType=FloatType())
@@ -81,6 +81,8 @@ Evicted_task_Per_priority_probability_Df = (
 ).drop("number of tasks per priority", "number of evicted tasks per priority")
 DataFrame_To_pandas_0 = Evicted_task_Per_priority_probability_Df.toPandas()
 print(DataFrame_To_pandas_0.head())
+
+
 
 
 
