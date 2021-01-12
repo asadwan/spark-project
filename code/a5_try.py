@@ -15,15 +15,15 @@ spark = SparkSession(sc)
 
 taskEventsSchema = StructType(
     [
-        StructField("timestamp", LongType(), True),
+        StructField("timestamp", IntegerType(), True),
         StructField("missing_info", StringType(), True),
-        StructField("job_id", StringType(), True),
-        StructField("task_index", StringType(), True),
-        StructField("machine_id", StringType(), True),
-        StructField("event_type", LongType(), True),
+        StructField("job_id", IntegerType(), True),
+        StructField("task_index", IntegerType(), True),
+        StructField("machine_id", IntegerType(), True),
+        StructField("event_type", IntegerType(), True),
         StructField("user_name", StringType(), True),
-        StructField("task_scheduling_class", LongType(), True),
-        StructField("priority", LongType(), True),
+        StructField("task_scheduling_class", IntegerType(), True),
+        StructField("priority", IntegerType(), True),
         StructField("cpu_request", FloatType(), True),
         StructField("memeory_request", FloatType(), True),
         StructField("disk_space_request", FloatType(), True),
