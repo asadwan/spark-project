@@ -14,12 +14,12 @@ class of its tasks, and their priority?'''
 
 jobEventsSchema = StructType(
     [
-        StructField("timestamp", LongType(), True),
+        StructField("timestamp", IntegerType(), True),
         StructField("missing_info", StringType(), True),
-        StructField("job_id", StringType(), True),
-        StructField("event_type", StringType(), True),
+        StructField("job_id", IntegerType(), True),
+        StructField("event_type", IntegerType(), True),
         StructField("user_name", StringType(), True),
-        StructField("job_scheduling_class", LongType(), True),
+        StructField("job_scheduling_class", IntegerType(), True),
         StructField("job_name", StringType(), True),
         StructField("logical_job_name", StringType(), True),
     ]
@@ -27,15 +27,15 @@ jobEventsSchema = StructType(
 
 taskEventsSchema = StructType(
     [
-        StructField("timestamp", LongType(), True),
+        StructField("timestamp", IntegerType(), True),
         StructField("missing_info", StringType(), True),
-        StructField("job_id", StringType(), True),
-        StructField("task_index", StringType(), True),
-        StructField("machine_id", StringType(), True),
-        StructField("event_type", StringType(), True),
+        StructField("job_id", IntegerType(), True),
+        StructField("task_index", IntegerType(), True),
+        StructField("machine_id", IntegerType(), True),
+        StructField("event_type", IntegerType(), True),
         StructField("user_name", StringType(), True),
-        StructField("task_scheduling_class", LongType(), True),
-        StructField("priority", LongType(), True),
+        StructField("task_scheduling_class", IntegerType(), True),
+        StructField("priority", IntegerType(), True),
         StructField("cpu_request", FloatType(), True),
         StructField("memeory_request", FloatType(), True),
         StructField("disk_space_request", FloatType(), True),
@@ -43,64 +43,36 @@ taskEventsSchema = StructType(
     ]
 )
 
-jobEventsDf = spark.read.schema(jobEventsSchema).csv("../data/job_events/*.csv.gz")
-taskEventsDf = spark.read.schema(taskEventsSchema).csv("../data/task_events/*.csv.gz")
+jobEventsDf = spark.read.schema(jobEventsSchema).csv("../data/job_events_1/*.csv.gz")
+taskEventsDf = spark.read.schema(taskEventsSchema).csv("../data/task_events_1/*.csv.gz")
 
-job_scheduling_class_Df = jobEventsDf.select("job_id", "job_scheduling_class").where(
-    F.col("job_id").isNotNull() & F.col("job_scheduling_class").isNotNull())
+job_scheduling_class_Df = (
+    jobEventsDf.select("job_id", "job_scheduling_class").distinct()
+    .where(F.col("job_id").isNotNull() & F.col("job_scheduling_class").isNotNull())
+    .sort("job_id")
+)
+D1 = job_scheduling_class_Df.toPandas()
 
-task_scheduling_class_and_priority_Df = taskEventsDf.select("job_id", "task_scheduling_class", "priority").where(
-    F.col("task_scheduling_class").isNotNull() & F.col("priority").isNotNull() & F.col("job_id").isNotNull())
+task_scheduling_class_and_priority_Df = (
+    taskEventsDf.select("job_id", "task_scheduling_class", "priority").distinct()
+    .where(F.col("task_scheduling_class").isNotNull() & F.col("priority").isNotNull() & F.col("job_id").isNotNull())
+    .sort("job_id")
+)
+D2 = task_scheduling_class_and_priority_Df.toPandas()
 
+new = job_scheduling_class_Df.join(
+    task_scheduling_class_and_priority_Df, ["job_id"]
+).sort("job_id")
+D3 = new.toPandas()
 
-mean_job_scheduling_class_Per_job_Df = (
-    job_scheduling_class_Df
-    .groupBy("job_id")
+correlation = (
+    task_scheduling_class_and_priority_Df.drop("job_id")
     .agg(
-        F.avg("job_scheduling_class").alias("avg_job_scheduling_class"),
-    )
+        F.corr(F.col("task_scheduling_class"), F.col("priority"))
+    ).alias("correlation")
 )
+D4 = correlation.toPandas()
 
-mean_task_scheduling_class_and_priority_Per_job_Df = (
-    task_scheduling_class_and_priority_Df
-    .groupBy("job_id")
-    .agg(
-        F.avg("task_scheduling_class").alias("avg_task_scheduling_class"),
-        F.avg("priority").alias("avg_priority"),
-    )
-)
+#print('correlation = ', correlation)
 
-mean_scheduling_priority_Per_job_Df = mean_task_scheduling_class_and_priority_Per_job_Df.join(
-    mean_job_scheduling_class_Per_job_Df, ["job_id"]
-)
-
-scheduling_Per_priority_Df = (
-    mean_scheduling_priority_Per_job_Df
-    .select("avg_priority", "avg_task_scheduling_class", "avg_job_scheduling_class")
-    .groupBy("avg_priority")
-    .agg(
-        F.mean("avg_task_scheduling_class"),
-        F.mean("avg_job_scheduling_class")
-    )
-    .sort("avg_priority")
-)
-
-scheduling_Per_priority_Df.coalesce(1).write.csv(
-    "../data/results/analysis4/scheduling_Per_priority",
-    header=True,
-    mode="overwrite",
-)
-
-
-corr_task_scheduling_and_priority_Df = (
-    scheduling_Per_priority_Df.
-    withColumn("correlation_priority_task_scheduling", F.corr("avg_priority", "avg_task_scheduling_class"))
-    .collect()[0]["correlation_priority_task_scheduling"]
-)
-
-corr_job_scheduling_and_priority_Df = scheduling_Per_priority_Df.withColumn("correlation_priority_job_scheduling", F.corr("avg_priority", "avg_job_scheduling_class")).collect()[0]["correlation_priority_job_scheduling"]
-corr_task_scheduling_and_priority_Df = scheduling_Per_priority_Df.withColumn("correlation_priority_task_scheduling", F.corr("avg_priority", "avg_task_scheduling_class")).collect()[0]["correlation_priority_task_scheduling"]
-# Pandas__Data_Frame_0 = scheduling_class_priority_task_event_Df.toPandas()
-
-print('corr_task_scheduling_and_priority:', corr_task_scheduling_and_priority_Df)
-print('corr_job_scheduling_and_priority:', corr_job_scheduling_and_priority_Df)
+print('')
